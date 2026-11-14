@@ -4,6 +4,7 @@ require 'jekyll'
 require 'json'
 require 'licensee'
 require 'open-uri'
+require 'safe_yaml'
 
 module SpecHelper
   class << self
@@ -27,8 +28,14 @@ end
 def config
   SpecHelper.config ||= begin
     config = Jekyll::Configuration.new.read_config_file config_file
-    config = Jekyll::Utils.deep_merge_hashes(config, source: source)
-    Jekyll::Utils.deep_merge_hashes(Jekyll::Configuration::DEFAULTS, config)
+    config = Jekyll::Utils.deep_merge_hashes(config, source:)
+    config = Jekyll::Utils.deep_merge_hashes(Jekyll::Configuration::DEFAULTS, config)
+    # The specs validate language-independent license metadata and i18n data, not
+    # the routing layer, so polyglot is not loaded for this bare `site.read`. This
+    # keeps collection counts exact (polyglot otherwise renders the site once per
+    # language during a full build).
+    config['plugins'] = Array(config['plugins']) - ['jekyll-polyglot']
+    config
   end
 end
 
@@ -72,9 +79,7 @@ def spdx_list
   SpecHelper.spdx ||= begin
     url = 'https://spdx.org/licenses/licenses.json'
     list = JSON.parse(OpenURI.open_uri(url).read)['licenses']
-    list.each_with_object({}) do |values, memo|
-      memo[values['licenseId']] = values
-    end
+    list.to_h { |values| [values['licenseId'], values] }
   end
 end
 
